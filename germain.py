@@ -30,7 +30,7 @@ def count_safe_primes(bits):
 
 def main():
     s = socket.socket()
-    s.connect(('localhost', 19102))
+    s.connect(('sw.w-nz.com', 19102))
     f = s.makefile()
     if len(sys.argv) >= 2:
         client = sys.argv[1]
