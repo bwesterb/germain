@@ -24,7 +24,7 @@ def count_safe_primes(bits):
         p = 2*q + 1
         if gmpy.is_prime(p):
             n += 1
-        if time.time() - started > 10:
+        if time.time() - started > 60:
             break
     return N, n
 
