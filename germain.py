@@ -29,23 +29,31 @@ def count_safe_primes(bits):
     return N, n
 
 def main():
-    s = socket.socket()
-    s.connect(('sw.w-nz.com', 19102))
-    f = s.makefile()
-    if len(sys.argv) >= 2:
-        client = sys.argv[1]
-    else:
-        client = base64.b64encode(os.urandom(5))
+    sleep_time = 0.1
     while True:
-        l = f.readline()
-        if not l:
-            break
-        bits = int(l[:-1])
-        N, n = count_safe_primes(bits)
-        print bits, N, n
-        f.write(json.dumps([client, bits, N, n]))
-        f.write("\n")
-        f.flush()
+        try:
+            s = socket.socket()
+            s.connect(('sw.w-nz.com', 19102))
+            f = s.makefile()
+            sleep_time = 0.1
+            if len(sys.argv) >= 2:
+                client = sys.argv[1]
+            else:
+                client = base64.b64encode(os.urandom(5))
+            while True:
+                l = f.readline()
+                if not l:
+                    break
+                bits = int(l[:-1])
+                N, n = count_safe_primes(bits)
+                print bits, N, n
+                f.write(json.dumps([client, bits, N, n]))
+                f.write("\n")
+                f.flush()
+        except socket.error as e:
+            print "%s. sleeping %s" % (e, sleep_time)
+            time.sleep(sleep_time)
+            sleep_time = min(sleep_time * 2, 60)
 
 if __name__ == '__main__':
     main()
