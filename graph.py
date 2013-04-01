@@ -12,6 +12,13 @@ with open('exact.jsons') as f:
             break
         d = json.loads(l[:-1])
         exact.append((d[0]+1, d[0]*(d[2]/float(d[1]))))
+exact2 = []
+with open('exact2.jsons') as f:
+    while True:
+        l = f.readline()
+        if not l:
+            break
+        exact2.append(json.loads(l[:-1]))
 
 with open('germaind.jsons') as f:
     results = {}
@@ -46,6 +53,9 @@ g = pyx.graph.graphxy(width=12,
 g.plot(pyx.graph.data.points(exact, x=1, y=2),
             [pyx.graph.style.symbol(
                 pyx.graph.style.symbol.plus, size=0.1)])
+g.plot(pyx.graph.data.points(exact2, x=1, y=2),
+            [pyx.graph.style.symbol(
+                pyx.graph.style.symbol.diamond, size=0.1)])
 g.plot(pyx.graph.data.points(data, x=1, ymin=2, y=3, ymax=4),
             [pyx.graph.style.symbol(), pyx.graph.style.errorbar()])
 c = 2 * 0.660161816 / math.log(2)
