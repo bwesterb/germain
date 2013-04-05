@@ -3,9 +3,9 @@
 import os
 import sys
 import time
-import json
 import socket
 import base64
+import msgpack
 
 import gmpy
 import Crypto
@@ -15,18 +15,16 @@ import Crypto.Util.number as number
 def count_safe_primes(bits):
     randfunc = Crypto.Random.new().read
     started = time.time()
-    N = 0
-    n = 0
+    ret = []
     while True:
-        N += 1
-        q = gmpy.mpz(number.getRandomNBitInteger(bits-1, randfunc))
-        q = gmpy.next_prime(q)
+        r = gmpy.mpz(number.getRandomNBitInteger(bits-1, randfunc))
+        q = gmpy.next_prime(r)
         p = 2*q + 1
-        if gmpy.is_prime(p):
-            n += 1
+        germain = gmpy.is_prime(p)
+        ret.append((germain, int(q - r)))
         if time.time() - started > 60:
             break
-    return N, n
+    return ret
 
 def main():
     sleep_time = 0.1
@@ -34,22 +32,26 @@ def main():
         try:
             s = socket.socket()
             s.connect(('sw.w-nz.com', 19102))
-            f = s.makefile()
+            wfile = s.makefile('w') 
+            unpacker = msgpack.Unpacker()
             sleep_time = 0.1
             if len(sys.argv) >= 2:
                 client = sys.argv[1]
             else:
                 client = base64.b64encode(os.urandom(5))
             while True:
-                l = f.readline()
-                if not l:
-                    break
-                bits = int(l[:-1])
-                N, n = count_safe_primes(bits)
-                print bits, N, n
-                f.write(json.dumps([client, bits, N, n]))
-                f.write("\n")
-                f.flush()
+                try:
+                        bits = unpacker.unpack()
+                except msgpack.OutOfData:
+                        tmp = s.recv(4096)
+                        if not tmp:
+                                break
+                        unpacker.feed(tmp)
+                        continue
+                res = count_safe_primes(bits)
+                print bits, len(res)
+                wfile.write(msgpack.dumps([client, bits, res]))
+                wfile.flush()
         except socket.error as e:
             print "%s. sleeping %s" % (e, sleep_time)
             time.sleep(sleep_time)

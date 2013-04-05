@@ -1,10 +1,10 @@
 """ germaind.py collects approximations computed by germain.py """
 
-import json
 import time
 import math
 import random
 import os.path
+import msgpack
 import threading
 import SocketServer
 
@@ -16,36 +16,35 @@ def weightedChoice(choices):
         cur += weight
         if cur >= x:
             return choice
-    print cur
     assert False
 
 class GermainDRH(SocketServer.StreamRequestHandler):
     def handle(self):
         print '%s: connected' % self.client_address[0]
+        unpacker = msgpack.Unpacker()
+        self.wfile.write(msgpack.dumps(self.server.get_next_bits()))
+        self.wfile.flush()
         try:
             while True:
-                self.wfile.write(self.server.get_next_bits())
-                self.wfile.write("\n")
-                self.wfile.flush()
-                l = self.rfile.readline()
-                if not l:
-                    break
                 try:
-                    d = json.loads(l[:-1])
-                except ValueError:
-                    print '%s: failed to parse %s' % (
-                                    self.client_address[0], repr(l))
-                    break
-                if (not isinstance(d, list) or len(d) != 4 or
+                    d = unpacker.unpack()
+                except msgpack.OutOfData:
+                    tmp = self.request.recv(4096)
+                    if not tmp:
+                        break
+                    unpacker.feed(tmp)
+                    continue
+                if (not isinstance(d, list) or len(d) != 3 or
                             not isinstance(d[0], basestring) or
                             not isinstance(d[1], int) or
-                            not isinstance(d[2], int) or
-                            not isinstance(d[3], int)):
+                            not isinstance(d[2], list)):
                     print '%s: invalid input %s' % (
-                                    self.client_address[0], repr(l))
+                                    self.client_address[0], repr(d))
                     break
-                client, bits, N, n = d
-                self.server.register(client, bits, N, n)
+                client, bits, res = d
+                self.server.register(client, bits, res)
+                self.wfile.write(msgpack.dumps(self.server.get_next_bits()))
+                self.wfile.flush()
         except IOError, e:
             print '%s: %s' % (self.client_address[0], e)
         print '%s: disconnected' % self.client_address[0]
@@ -56,15 +55,21 @@ class GermainD(SocketServer.ThreadingMixIn, SocketServer.TCPServer):
         self.allow_reuse_address = True
         self.results = {}
         self.lock = threading.Lock()
-    def register(self, client, bits, N, n):
+    def register(self, client, bits, res):
         if not bits in self.results:
             print 'Ignoring record for bits %s' % bits
             return
         with self.lock:
+            N = 0
+            n = 0
+            for entry in res:
+                N += 1
+                if entry[0]:
+                    n += 1
+            print "%s: %sb %s %s" % (client, bits, N, n)
             self.results[bits][0] += N
             self.results[bits][1] += n
-            self.f.write(json.dumps([client, time.time(), bits, N, n]))
-            self.f.write("\n")
+            self.f.write(msgpack.dumps([client, time.time(), bits, res]))
             self.f.flush()
     def bits_to_error(self):
         ret = {}
@@ -84,19 +89,26 @@ class GermainD(SocketServer.ThreadingMixIn, SocketServer.TCPServer):
         return weightedChoice(self.bits_to_error().items())
     def load(self):
         """ Loads state from the log file. """
-        if os.path.exists('germaind.jsons'):
-            with open('germaind.jsons') as f:
+        if os.path.exists('germaind.msgpacks'):
+            with open('germaind.msgpacks') as f:
+                unpacker = msgpack.Unpacker(f)
                 while True:
-                    l = f.readline()
-                    if not l:
+                    try:
+                        d = unpacker.unpack()
+                    except msgpack.OutOfData:
                         break
-                    d = json.loads(l[:-1])
-                    clientid, ts, bits, N, n = d
+                    clientid, ts, bits, res = d
                     if bits not in self.results:
                         self.results[bits] = [0,0]
+                    N = 0
+                    n = 0
+                    for entry in res:
+                        N += 1
+                        if entry[0]:
+                            n += 1
                     self.results[bits][0] += N
                     self.results[bits][1] += n
-        self.f = open('germaind.jsons', 'a')
+        self.f = open('germaind.msgpacks', 'a')
     def main(self):
         self.load()
         self.server_bind()
