@@ -6,6 +6,7 @@ import time
 import socket
 import base64
 import msgpack
+import multiprocessing
 
 import gmpy
 import Crypto
@@ -58,4 +59,6 @@ def main():
             sleep_time = min(sleep_time * 2, 60)
 
 if __name__ == '__main__':
-    main()
+    for i in xrange(multiprocessing.cpu_count()):
+        print 'starting process #%s' % (i+1)
+        multiprocessing.Process(target=main).start()
